@@ -24,9 +24,10 @@ def lambda_handler(event, context):
 
 def suggest_lunch():
     # Setting stdin/out/err encoding
-    sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding=ENCODING)
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding=ENCODING)
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding=ENCODING)
+    # Not use in aws lambda
+    # sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding=ENCODING)
+    # sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding=ENCODING)
+    # sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding=ENCODING)
 
     # Loading list from file
     list = []
