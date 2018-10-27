@@ -1,13 +1,16 @@
+import csv
 import io
 import json
 import os
 import random
 import sys
 import urllib.request
+import datetime
 
 ENCODING = "utf-8"
 LIST_FILE_NAME = "./list.json"
 NUM_SUGGESTION = 3
+FILE_HOLIDAY="syukujitsu_kyujitsu.csv"
 WEB_HOOK_URL = os.environ["WEB_HOOK_URL"]
 SLACK_USER_NAME = "お昼ごはん推薦"
 SLACK_PROFILE_EMOJI = ":bento:"
@@ -15,12 +18,40 @@ SLACK_PREFIX_TEXT = "今日のお昼ご飯はこの中から選んでみては�
 SLACK_SUFFIX_TEXT = ""
 
 def lambda_handler(event, context):
-    response = suggest_lunch()
+    if isHoliday() is False:
+        response = suggest_lunch()
+
+        return {
+            "statusCode": 200,
+            "body": json.dumps(response)
+        }
 
     return {
-        "statusCode": 200,
-        "body": json.dumps(response)
+        "statusCode": 204,
+        "body": "Not posted to slack, because today is holiday."
     }
+
+def isHoliday():
+    # Getting today and weekday
+    JST = datetime.timezone(datetime.timedelta(hours=+9), "JST")
+    now = datetime.datetime.now(JST)
+    today = now.strftime("%Y-%m-%d")
+    weekday = now.weekday()
+
+    # On Suturday or Sunday
+    if weekday >= 5:
+      return True
+
+    # Judgement whether today is holiday
+    with open(FILE_HOLIDAY, "r", encoding=ENCODING) as file_holiday:
+        reader = csv.reader(file_holiday)
+        header = next(reader)
+
+        for row in reader:
+            if row[0] == today:
+                return True
+
+    return False
 
 def suggest_lunch():
     # Setting stdin/out/err encoding
