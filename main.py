@@ -8,17 +8,17 @@ import urllib.request
 import datetime
 
 ENCODING = "utf-8"
-LIST_FILE_NAME = "./list.json"
+FILE_NAME_LIST = "./list.json"
+FILE_NAME_HOLIDAY="./syukujitsu_kyujitsu.csv"
 NUM_SUGGESTION = 3
-FILE_HOLIDAY="syukujitsu_kyujitsu.csv"
-WEB_HOOK_URL = os.environ["WEB_HOOK_URL"]
+SLACK_WEB_HOOK_URL = os.environ["WEB_HOOK_URL"]
 SLACK_USER_NAME = "お昼ごはん推薦"
 SLACK_PROFILE_EMOJI = ":bento:"
 SLACK_PREFIX_TEXT = "今日のお昼ご飯はこの中から選んでみては？\n"
 SLACK_SUFFIX_TEXT = ""
 
 def lambda_handler(event, context):
-    if isHoliday() is False:
+    if is_today_holiday() is False:
         response = suggest_lunch()
 
         return {
@@ -31,7 +31,7 @@ def lambda_handler(event, context):
         "body": "Not posted to slack, because today is holiday."
     }
 
-def isHoliday():
+def is_today_holiday():
     # Getting today and weekday
     JST = datetime.timezone(datetime.timedelta(hours=+9), "JST")
     now = datetime.datetime.now(JST)
@@ -43,7 +43,7 @@ def isHoliday():
       return True
 
     # Judgement whether today is holiday
-    with open(FILE_HOLIDAY, "r", encoding=ENCODING) as file_holiday:
+    with open(FILE_NAME_HOLIDAY, "r", encoding=ENCODING) as file_holiday:
         reader = csv.reader(file_holiday)
         header = next(reader)
 
@@ -62,7 +62,7 @@ def suggest_lunch():
 
     # Loading list from file
     list = []
-    with open(LIST_FILE_NAME, "r", encoding=ENCODING) as list_file:
+    with open(FILE_NAME_LIST, "r", encoding=ENCODING) as list_file:
         file_text = list_file.read()
         list = json.loads(file_text)
 
@@ -87,7 +87,7 @@ def suggest_lunch():
         "text": message,
     }
     to_send_text = "payload=" + json.dumps(to_send_data)
-    request = urllib.request.Request(WEB_HOOK_URL, data=to_send_text.encode(ENCODING), method="POST")
+    request = urllib.request.Request(SLACK_WEB_HOOK_URL, data=to_send_text.encode(ENCODING), method="POST")
     response_body = ""
     with urllib.request.urlopen(request) as response:
         response_body = response.read().decode(ENCODING)
