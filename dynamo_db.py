@@ -1,16 +1,16 @@
-import sys
+import random
+import logging
 
 import boto3
 from boto3.dynamodb.conditions import Key, Attr
 from botocore.exceptions import ClientError
-import logging
-import random
 
 from data_store import DataStore
 from data_operation_error import DataOperationError
 
 TABLE_NAME = "Lunch"
 KEY_LUNCH_NAME = "name"
+NUM_SUGGESTION = 3
 
 RETURN_TEXT = {
     "ALREADY_REGISTERED": "The place is registered already"
@@ -28,7 +28,12 @@ class DynamoDB(DataStore):
         self.logger = logging.getLogger()
 
     def add_eating_place(self, place_name):
-
+        """
+        Args:
+            place_name (str): The name of eating place which will be tried to add.
+        Returns:
+            bool
+        """
         try:
             if self.is_place_exists(place_name):
                 raise DataOperationError("")
@@ -50,6 +55,7 @@ class DynamoDB(DataStore):
         Args:
             place_name (str): The name of eating place which will be tried to delete.
         Returns:
+            bool
         """
         try:
             if not self.is_place_exists(place_name):
@@ -68,6 +74,7 @@ class DynamoDB(DataStore):
     def get_list_of_eating_place(self):
         """
         Returns:
+            Array
         """
         try:
             response = self.table.scan()
@@ -84,7 +91,6 @@ class DynamoDB(DataStore):
         Returns:
             array: list of suggested eating place.
         """
-        NUM_SUGGESTION = 3
         eating_places = self.get_list_of_eating_place()
         suggestions = []
         for i in range(NUM_SUGGESTION):

@@ -1,16 +1,12 @@
-from dynamo_db import DynamoDB
 import csv
 import json
 import os
-import random
 import urllib.request
 import urllib.parse
 import datetime
-import logging
 
+from dynamo_db import DynamoDB
 from data_operation_error import DataOperationError
-
-logger = logging.getLogger()
 
 ENCODING = "utf-8"
 FILE_NAME_LIST = "./list.json"
@@ -75,6 +71,11 @@ def lambda_handler(event, context):
 
 
 def convert_tuple_params_to_dict(params_urllib_result):
+    """
+    Convert tuple that has two items to dict
+    Return: dict
+    """
+
     params_dict = {}
     for item in params_urllib_result:
         params_dict[item[0]] = item[1]
@@ -83,11 +84,11 @@ def convert_tuple_params_to_dict(params_urllib_result):
 
 def add_eating_place(place_name):
     """
-    Return: response text
+    Return: response of AWS Lambda
     """
 
     data_store = DynamoDB()
-    if len(place_name) == 0:
+    if not place_name:
         return {
             "statusCode": 200,
             "body": "お店の名前がありませんよ！"
@@ -95,7 +96,7 @@ def add_eating_place(place_name):
 
     try:
         if not data_store.is_place_exists(place_name):
-            response = data_store.add_eating_place(place_name)
+            data_store.add_eating_place(place_name)
             return {
                 "statusCode": 200,
                 "body": "%sをお店リストに追加しました！" % (place_name)
@@ -105,7 +106,7 @@ def add_eating_place(place_name):
                 "statusCode": 200,
                 "body": "%sはすでに登録されていますよ！" % (place_name)
             }
-    except DataOperationError as error:
+    except DataOperationError:
         return {
             "statusCode": 200,
             "body": "すみません、サーバでなんらかの問題が起きているようです"
@@ -114,11 +115,11 @@ def add_eating_place(place_name):
 
 def del_eating_place(place_name):
     """
-    Return: response text
+    Return: response of AWS Lambda
     """
 
     data_store = DynamoDB()
-    if len(place_name) == 0:
+    if not place_name:
         return {
             "statusCode": 200,
             "body": "お店の名前がありませんよ！"
@@ -126,7 +127,7 @@ def del_eating_place(place_name):
 
     try:
         if data_store.is_place_exists(place_name):
-            response = data_store.del_eating_place(place_name)
+            data_store.del_eating_place(place_name)
             return {
                 "statusCode": 200,
                 "body": "%sをお店リストから削除しました" % (place_name)
@@ -136,7 +137,7 @@ def del_eating_place(place_name):
                 "statusCode": 200,
                 "body": "%sはお店リストにないようです" % (place_name)
             }
-    except DataOperationError as error:
+    except DataOperationError:
         return {
             "statusCode": 200,
             "body": "すみません、サーバでなんらかの問題が起きているようです"
@@ -145,7 +146,7 @@ def del_eating_place(place_name):
 
 def get_list_of_eating_place():
     """
-    Return: list
+    Return: response of AWS Lambda
     """
 
     data_store = DynamoDB()
@@ -165,7 +166,7 @@ def get_list_of_eating_place():
             "statusCode": 200,
             "body": return_text
         }
-    except DataOperationError as error:
+    except DataOperationError:
         return {
             "statusCode": 200,
             "body": "すみません、サーバでなんらかの問題が起きているようです"
@@ -174,7 +175,7 @@ def get_list_of_eating_place():
 
 def get_suggestion():
     """
-    Return: list
+    Return: response of AWS Lambda
     """
 
     data_store = DynamoDB()
@@ -188,7 +189,7 @@ def get_suggestion():
             "body": return_text
         }
 
-    except DataOperationError as error:
+    except DataOperationError:
         return {
             "statusCode": 200,
             "body": "すみません、サーバでなんらかの問題が起きているようです"
@@ -197,7 +198,7 @@ def get_suggestion():
 
 def post_suggestion_to_webhook():
     """
-    Return a directory that has stetusCode and body
+    Return: response of AWS Lambda
     """
     if is_today_holiday():
         return {
@@ -205,11 +206,30 @@ def post_suggestion_to_webhook():
             "body": "Not posted to slack, because today is holiday."
         }
 
-    response = suggest_lunch()
+    data_store = DynamoDB()
+    suggestions = data_store.get_suggestion()
+
+    # Creating message
+    message = SLACK_PREFIX_TEXT
+    for i, item in enumerate(suggestions):
+        index = str(i + 1)
+        message += index + ". " + item + "\n"
+    message += SLACK_SUFFIX_TEXT
+
+    # Posting to slack
+    to_send_data = {
+        "text": message
+    }
+    to_send_text = "payload=" + json.dumps(to_send_data)
+    request = urllib.request.Request(
+        SLACK_WEB_HOOK_URL, data=to_send_text.encode(ENCODING), method="POST")
+    response_body = ""
+    with urllib.request.urlopen(request) as response:
+        response_body = response.read().decode(ENCODING)
 
     return {
         "statusCode": 200,
-        "body": json.dumps(response)
+        "body": json.dumps(response_body)
     }
 
 
@@ -238,40 +258,3 @@ def is_today_holiday():
                 return True
 
     return False
-
-
-def suggest_lunch():
-    """
-    Choice lunch store randomly.
-    Then, Post slack it.
-    """
-    # Setting stdin/out/err encoding
-    # Not use in aws lambda
-    # sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding=ENCODING)
-    # sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding=ENCODING)
-    # sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding=ENCODING)
-
-    data_store = DynamoDB()
-    suggestions = data_store.get_suggestion()
-
-    # Creating message
-    message = SLACK_PREFIX_TEXT
-    for i, item in enumerate(suggestions):
-        index = str(i + 1)
-        message += index + ". " + item + "\n"
-    message += SLACK_SUFFIX_TEXT
-
-    # Posting to slack
-    to_send_data = {
-        "username": SLACK_USER_NAME,
-        "icon_emoji": SLACK_PROFILE_EMOJI,
-        "text": message,
-    }
-    to_send_text = "payload=" + json.dumps(to_send_data)
-    request = urllib.request.Request(
-        SLACK_WEB_HOOK_URL, data=to_send_text.encode(ENCODING), method="POST")
-    response_body = ""
-    with urllib.request.urlopen(request) as response:
-        response_body = response.read().decode(ENCODING)
-
-    return response_body
