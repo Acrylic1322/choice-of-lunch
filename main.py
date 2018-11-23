@@ -4,6 +4,8 @@ import os
 import urllib.request
 import urllib.parse
 import datetime
+import hmac
+import hashlib
 
 from dynamo_db import DynamoDB
 from data_operation_error import DataOperationError
@@ -16,7 +18,8 @@ COMMAND_ADD = "/lunch-add"
 COMMAND_DEL = "/lunch-del"
 COMMAND_GET_LIST = "/lunch-list"
 COMMAND_GET_SUGGESTION = "/lunch-suggestion"
-SLACK_WEB_HOOK_URL = os.environ["WEB_HOOK_URL"]
+SLACK_WEB_HOOK_URL = os.environ["SLACK_WEB_HOOK_URL"]
+SLACK_SECRET = os.environ["SLACK_SECRET"]
 SLACK_USER_NAME = "お昼ごはん推薦"
 SLACK_PROFILE_EMOJI = ":bento:"
 SLACK_PREFIX_TEXT = "今日のお昼ご飯はこの中から選んでみては？\n"
@@ -31,6 +34,12 @@ def lambda_handler(event, context):
         # Called by Timer.
         return post_suggestion_to_webhook()
     elif "httpMethod" in event:
+        if not is_request_from_slack(event):
+            return {
+                "statusCode": 400,
+                "body": "Not allowd to receive request from you"
+            }
+
         # Called by API gateway
         if event["httpMethod"] == "POST":
             params = convert_tuple_params_to_dict(urllib.parse.parse_qsl(event["body"]))
@@ -68,6 +77,34 @@ def lambda_handler(event, context):
             "statusCode": 400,
             "body": "Not allowed your action"
         }
+
+
+def is_request_from_slack(event):
+    """
+    If the request was from slack, return true.
+    It check signature in http header and SLACK_SECRET
+    """
+    try:
+        timestamp = event["headers"]["X-Slack-Request-Timestamp"]
+        signature = event["headers"]["X-Slack-Signature"]
+        body = event["body"]
+    except KeyError:
+        return False
+
+    # Check replay attack
+    now = int(datetime.datetime.now().timestamp())
+    if abs(now - int(timestamp)) > 60 * 5:
+        return False
+
+    basestring = "v0:" + timestamp + ":" + body
+    created_signature = hmac.new(SLACK_SECRET.encode("ascii"),
+                                 basestring.encode("ascii"),
+                                 hashlib.sha256).hexdigest()
+    created_signature = "v0=" + created_signature
+
+    if created_signature == signature:
+        return True
+    return False
 
 
 def convert_tuple_params_to_dict(params_urllib_result):
